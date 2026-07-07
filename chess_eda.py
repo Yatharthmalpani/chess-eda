@@ -1,5 +1,5 @@
 # ============================================================
-#   CHESS GAMES - EXPLORATORY DATA ANALYSIS (STUDENT VERSION)
+#   CHESS GAMES - EXPLORATORY DATA ANALYSIS 
 #   Dataset : games.csv (~20,000 Lichess games)
 #   Tools   : numpy, pandas, matplotlib, seaborn
 # ============================================================

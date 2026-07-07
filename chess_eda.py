@@ -1,739 +1,1129 @@
-# ============================================================
-#   CHESS GAMES - EXPLORATORY DATA ANALYSIS 
-#   Dataset : games.csv (~20,000 Lichess games)
-#   Tools   : numpy, pandas, matplotlib, seaborn
-# ============================================================
+# =====================================================
+# CHESS GAMES EDA
+# Part 1
+# Load Dataset + Cleaning + Figure 1 + Figure 2
+# =====================================================
 
-import numpy as np
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-import seaborn as sns
 
-# ============================================================
-# STEP 1 — LOAD & CLEAN DATA
-# ============================================================
+# -----------------------------------------------------
+# LOAD DATA
+# -----------------------------------------------------
 
 df = pd.read_csv("games.csv")
 
-print("Shape:", df.shape)
-print("\nColumn names:", df.columns.tolist())
-print("\nMissing values:\n", df.isnull().sum())
-print("\nWinner counts:\n",        df["winner"].value_counts())
-print("\nVictory status counts:\n", df["victory_status"].value_counts())
+print("Shape of Dataset:", df.shape)
 
-# Create useful columns
-df["avg_rating"]    = (df["white_rating"] + df["black_rating"]) / 2
-df["rating_diff"]   = df["white_rating"] - df["black_rating"]
-df["abs_diff"]      = df["rating_diff"].abs()
+print("\nColumns")
+print(df.columns)
 
-BINS   = [0, 1000, 1200, 1400, 1600, 1800, 2000, 3000]
-LABELS = ["<1000","1000-1200","1200-1400","1400-1600","1600-1800","1800-2000","2000+"]
-df["rating_group"] = pd.cut(df["avg_rating"], bins=BINS, labels=LABELS)
+print("\nMissing Values")
+print(df.isnull().sum())
 
-total = len(df)
-print(f"\nTotal games : {total:,}")
-print(f"White wins  : {(df['winner']=='white').sum():,}  ({(df['winner']=='white').mean()*100:.1f}%)")
-print(f"Black wins  : {(df['winner']=='black').sum():,}  ({(df['winner']=='black').mean()*100:.1f}%)")
-print(f"Draws       : {(df['winner']=='draw').sum():,}  ({(df['winner']=='draw').mean()*100:.1f}%)")
+print("\nWinner Counts")
+print(df["winner"].value_counts())
 
+print("\nVictory Status Counts")
+print(df["victory_status"].value_counts())
 
-# ============================================================
-# FIGURE 1 — Who wins? Overall outcome breakdown  (1×3)
-# ============================================================
+# -----------------------------------------------------
+# CREATE NEW COLUMNS
+# -----------------------------------------------------
 
-fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-fig.suptitle("WHO WINS? — OVERALL OUTCOME BREAKDOWN", fontsize=12)
-plt.subplots_adjust(wspace=0.38)
+df["avg_rating"] = (df["white_rating"] + df["black_rating"]) / 2
 
-# 1-A  Pie chart — simple outcome split
-ax = axes[0]
-sizes  = [
-    (df["winner"] == "white").sum(),
-    (df["winner"] == "black").sum(),
-    (df["winner"] == "draw" ).sum(),
+df["rating_diff"] = df["white_rating"] - df["black_rating"]
+
+df["abs_diff"] = abs(df["rating_diff"])
+
+rating_bins = [0,1000,1200,1400,1600,1800,2000,3000]
+
+rating_labels = [
+    "<1000",
+    "1000-1200",
+    "1200-1400",
+    "1400-1600",
+    "1600-1800",
+    "1800-2000",
+    "2000+"
 ]
-labels = ["White Wins", "Black Wins", "Draw"]
-colors = ['blue', 'orange', 'gray']
-wedges, texts, autotexts = ax.pie(
-    sizes, labels=labels, colors=colors,
-    autopct="%1.1f%%", startangle=90,
-    wedgeprops=dict(edgecolor='white', linewidth=1),
+
+df["rating_group"] = pd.cut(
+    df["avg_rating"],
+    bins=rating_bins,
+    labels=rating_labels
 )
-ax.set_title("Outcome Split (Pie)")
 
-# 1-B  Bar chart — same data as bars
-ax = axes[1]
-bars = ax.bar(labels, [s / total * 100 for s in sizes],
-              color=colors, edgecolor='black', linewidth=1, width=0.5)
-# Add value labels
-for bar in bars:
-    height = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width() / 2, height + 0.5,
-            f"{height:.1f}%", ha="center", va="bottom", fontsize=8)
-ax.set_ylabel("Percentage (%)")
-ax.set_ylim(0, 65)
-ax.set_title("Outcome Split (Bar)")
+print("\nTotal Games:", len(df))
 
-# 1-C  Victory status — how games actually end
-ax = axes[2]
-vs_counts = df["victory_status"].value_counts()
-pal = ['red', 'blue', 'orange', 'gray']
-bars2 = ax.bar(vs_counts.index, vs_counts.values,
-               color=pal[:len(vs_counts)], edgecolor='black', linewidth=1)
-# Add value labels
-for bar in bars2:
-    height = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width() / 2, height + 50,
-            f"{int(height)}", ha="center", va="bottom", fontsize=8)
-ax.set_title("How Games End (Victory Status)")
-ax.set_ylabel("Number of Games")
+print("White Wins :", (df["winner"]=="white").sum())
 
-plt.tight_layout()
-plt.savefig("fig1_outcome_overview.png")
-plt.close()
-print("Saved fig1_outcome_overview.png")
+print("Black Wins :", (df["winner"]=="black").sum())
+
+print("Draws :", (df["winner"]=="draw").sum())
 
 
-# ============================================================
-# FIGURE 2 — Does White have an unfair advantage?  (2×2)
-# ============================================================
+# =====================================================
+# FIGURE 1
+# WHO WINS?
+# =====================================================
 
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-fig.suptitle("DOES WHITE HAVE AN ADVANTAGE?", fontsize=12)
-plt.subplots_adjust(hspace=0.4, wspace=0.35)
+plt.figure(figsize=(15,5))
 
-# 2-A  White win rate per rating group (line chart)
-ax = axes[0, 0]
-white_rates = []
-for grp in LABELS:
-    sub = df[df["rating_group"] == grp]
-    n   = len(sub[sub["winner"].isin(["white","black","draw"])])
-    rate = (sub["winner"] == "white").sum() / n * 100 if n > 0 else np.nan
-    white_rates.append(rate)
+# -----------------------------------------
+# Pie Chart
+# -----------------------------------------
 
-ax.plot(LABELS, white_rates, color='blue', lw=2, marker="o", markersize=6)
-ax.axhline(50, color='gray', lw=1, ls="--", alpha=0.6, label="50% line")
-ax.fill_between(LABELS, white_rates, 50,
-                where=[w > 50 for w in white_rates],
-                alpha=0.15, color='blue')
-ax.set_xticks(range(len(LABELS)))
-ax.set_xticklabels(LABELS, rotation=30, ha="right")
-ax.set_ylabel("White Win Rate (%)")
-ax.set_ylim(40, 65)
-ax.legend(fontsize=8)
-ax.set_title("White Win Rate by Rating Group")
+plt.subplot(1,3,1)
 
-# 2-B  Stacked bar — White / Black / Draw % per rating group
-ax = axes[0, 1]
-w_pcts, b_pcts, d_pcts = [], [], []
-for grp in LABELS:
-    sub = df[df["rating_group"] == grp]
-    n   = max(len(sub), 1)
-    w_pcts.append((sub["winner"] == "white").sum() / n * 100)
-    b_pcts.append((sub["winner"] == "black").sum() / n * 100)
-    d_pcts.append((sub["winner"] == "draw" ).sum() / n * 100)
+winner_counts = df["winner"].value_counts()
 
-x = np.arange(len(LABELS))
-ax.bar(x, w_pcts, label="White",  color='blue', edgecolor='black', linewidth=0.5)
-ax.bar(x, b_pcts, label="Black",  color='orange', edgecolor='black', linewidth=0.5, bottom=w_pcts)
-bottom2 = [a + b for a, b in zip(w_pcts, b_pcts)]
-ax.bar(x, d_pcts, label="Draw",   color='gray',  edgecolor='black', linewidth=0.5, bottom=bottom2)
-ax.set_xticks(x)
-ax.set_xticklabels(LABELS, rotation=30, ha="right")
-ax.set_ylabel("Percentage (%)")
-ax.set_ylim(0, 105)
-ax.legend(fontsize=8)
-ax.set_title("Outcome % per Rating Group (Stacked)")
+plt.pie(
+    winner_counts,
+    labels=winner_counts.index,
+    autopct="%1.1f%%"
+)
 
-# 2-C  Draw rate by rating group
-ax = axes[1, 0]
-draw_rates = [d for d in d_pcts]
-bars3 = ax.bar(LABELS, draw_rates, color='gray', edgecolor='black', linewidth=1)
-for bar in bars3:
-    height = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width() / 2, height + 0.2,
-            f"{height:.1f}%", ha="center", va="bottom", fontsize=8)
-ax.set_xticks(range(len(LABELS)))
-ax.set_xticklabels(LABELS, rotation=30, ha="right")
-ax.set_ylabel("Draw Rate (%)")
-ax.set_title("Draw Rate by Rating Group")
+plt.title("Winner Distribution")
 
-# 2-D  Rated vs Unrated — does it affect who wins?
-ax = axes[1, 1]
-rated_df   = df[df["rated"] == True]
-unrated_df = df[df["rated"] == False]
-cat_labels  = ["White Wins", "Black Wins", "Draw"]
-rated_vals   = [(rated_df["winner"] == w).mean() * 100   for w in ["white","black","draw"]]
-unrated_vals = [(unrated_df["winner"] == w).mean() * 100 for w in ["white","black","draw"]]
-x = np.arange(3)
-w = 0.35
-ax.bar(x - w/2, rated_vals,   w, label="Rated",   color='red',  edgecolor='black')
-ax.bar(x + w/2, unrated_vals, w, label="Unrated", color='purple',  edgecolor='black')
-ax.set_xticks(x)
-ax.set_xticklabels(cat_labels)
-ax.set_ylabel("Percentage (%)")
-ax.legend(fontsize=8)
-ax.set_title("Rated vs Unrated Games")
+# -----------------------------------------
+# Bar Chart
+# -----------------------------------------
+
+plt.subplot(1,3,2)
+
+winner_counts.plot(kind="bar")
+
+plt.title("Winner Distribution")
+plt.xlabel("Winner")
+plt.ylabel("Games")
+
+# -----------------------------------------
+# Victory Status
+# -----------------------------------------
+
+plt.subplot(1,3,3)
+
+df["victory_status"].value_counts().plot(kind="bar")
+
+plt.title("Victory Status")
+plt.xlabel("Status")
+plt.ylabel("Games")
 
 plt.tight_layout()
-plt.savefig("fig2_white_advantage.png")
-plt.close()
-print("Saved fig2_white_advantage.png")
+
+plt.show()
 
 
-# ============================================================
-# FIGURE 3 — Rating & Winning  (2×2)
-# ============================================================
+# =====================================================
+# FIGURE 2
+# DOES WHITE HAVE AN ADVANTAGE?
+# =====================================================
 
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-fig.suptitle("DOES RATING ACTUALLY MATTER?", fontsize=12)
-plt.subplots_adjust(hspace=0.4, wspace=0.35)
+plt.figure(figsize=(14,10))
+
+# -----------------------------------------
+# White Win Rate by Rating Group
+# -----------------------------------------
+
+plt.subplot(2,2,1)
+
+white_rate = []
+
+for group in rating_labels:
+
+    temp = df[df["rating_group"]==group]
+
+    if len(temp)>0:
+
+        rate = (temp["winner"]=="white").mean()*100
+
+    else:
+
+        rate = np.nan
+
+    white_rate.append(rate)
+
+plt.plot(rating_labels, white_rate, marker="o")
+
+plt.title("White Win Rate by Rating")
+plt.xlabel("Rating Group")
+plt.ylabel("White Win %")
+
+plt.xticks(rotation=30)
+
+plt.grid(True)
+
+
+# -----------------------------------------
+# White Black Draw Percentage
+# -----------------------------------------
+
+plt.subplot(2,2,2)
+
+white_percent=[]
+black_percent=[]
+draw_percent=[]
+
+for group in rating_labels:
+
+    temp=df[df["rating_group"]==group]
+
+    if len(temp)>0:
+
+        white_percent.append((temp["winner"]=="white").mean()*100)
+
+        black_percent.append((temp["winner"]=="black").mean()*100)
+
+        draw_percent.append((temp["winner"]=="draw").mean()*100)
+
+    else:
+
+        white_percent.append(0)
+
+        black_percent.append(0)
+
+        draw_percent.append(0)
+
+x=np.arange(len(rating_labels))
+
+plt.bar(x,white_percent,label="White")
+
+plt.bar(x,black_percent,bottom=white_percent,label="Black")
+
+bottom=[]
+
+for i in range(len(white_percent)):
+    bottom.append(white_percent[i]+black_percent[i])
+
+plt.bar(x,draw_percent,bottom=bottom,label="Draw")
+
+plt.xticks(x,rating_labels,rotation=30)
+
+plt.ylabel("Percentage")
+
+plt.title("Game Result by Rating Group")
+
+plt.legend()
+
+
+# -----------------------------------------
+# Draw Rate
+# -----------------------------------------
+
+plt.subplot(2,2,3)
+
+plt.bar(rating_labels,draw_percent)
+
+plt.title("Draw Rate by Rating")
+
+plt.xlabel("Rating Group")
+
+plt.ylabel("Draw %")
+
+plt.xticks(rotation=30)
+
+
+# -----------------------------------------
+# Rated vs Unrated
+# -----------------------------------------
+
+plt.subplot(2,2,4)
+
+rated=df[df["rated"]==True]
+
+unrated=df[df["rated"]==False]
+
+rated_result=[
+    (rated["winner"]=="white").mean()*100,
+    (rated["winner"]=="black").mean()*100,
+    (rated["winner"]=="draw").mean()*100
+]
+
+unrated_result=[
+    (unrated["winner"]=="white").mean()*100,
+    (unrated["winner"]=="black").mean()*100,
+    (unrated["winner"]=="draw").mean()*100
+]
+
+x=np.arange(3)
+
+width=0.35
+
+plt.bar(x-width/2,rated_result,width,label="Rated")
+
+plt.bar(x+width/2,unrated_result,width,label="Unrated")
+
+plt.xticks(x,["White","Black","Draw"])
+
+plt.ylabel("Percentage")
+
+plt.title("Rated vs Unrated Games")
+
+plt.legend()
+
+plt.tight_layout()
+
+plt.show()
+# =====================================================
+# FIGURE 3
+# DOES RATING MATTER?
+# =====================================================
+
+plt.figure(figsize=(14,10))
+
+# -------------------------------------------------
+# Higher Rated Player Win Rate
+# -------------------------------------------------
 
 games = df[df["winner"].isin(["white","black"])].copy()
+
 games["higher_rated_wins"] = (
-    ((games["white_rating"] > games["black_rating"]) & (games["winner"] == "white")) |
-    ((games["black_rating"] > games["white_rating"]) & (games["winner"] == "black"))
-).astype(int)
+    ((games["white_rating"] > games["black_rating"]) & (games["winner"]=="white")) |
+    ((games["black_rating"] > games["white_rating"]) & (games["winner"]=="black"))
+)
 
-# 3-A  Win probability by rating gap bucket
-ax = axes[0, 0]
-gap_bins   = [0, 50, 100, 200, 300, 500, 1500]
-gap_labels = ["0–50","50–100","100–200","200–300","300–500","500+"]
-games["gap_bin"] = pd.cut(games["abs_diff"], bins=gap_bins, labels=gap_labels)
+gap_bins = [0,50,100,200,300,500,1500]
 
-pred  = games.groupby("gap_bin", observed=True)["higher_rated_wins"].mean() * 100
-count = games.groupby("gap_bin", observed=True)["higher_rated_wins"].count()
+gap_labels = [
+    "0-50",
+    "50-100",
+    "100-200",
+    "200-300",
+    "300-500",
+    "500+"
+]
 
-ax.plot(gap_labels, pred.values, color='green', lw=2, marker="D", markersize=7)
-ax.fill_between(gap_labels, pred.values, 50, alpha=0.2, color='green')
-ax.axhline(50, color='gray', lw=1, ls="--", alpha=0.6, label="50% (random)")
-for i, (val, cnt) in enumerate(zip(pred.values, count.values)):
-    ax.text(i, val + 1.5, f"n={cnt:,}", ha="center", fontsize=7, color='gray')
-ax.set_ylabel("Higher-Rated Player Win Rate (%)")
-ax.set_ylim(40, 100)
-ax.legend(fontsize=8)
-ax.set_title("How Much Rating Gap Predicts the Winner")
+games["gap_group"] = pd.cut(
+    games["abs_diff"],
+    bins=gap_bins,
+    labels=gap_labels
+)
 
-# 3-B  Histogram — rating difference distribution
-ax = axes[0, 1]
-ax.hist(games["rating_diff"], bins=60, color='purple', edgecolor='black', linewidth=0.5, alpha=0.8)
-ax.axvline(0, color='red', lw=2, ls="--", label="Zero difference")
-ax.axvline(games["rating_diff"].mean(), color='blue', lw=1.5, ls=":",
-           label=f"Mean = {games['rating_diff'].mean():.0f}")
-ax.set_xlabel("Rating Difference (White − Black)")
-ax.set_ylabel("Number of Games")
-ax.legend(fontsize=8)
-ax.set_title("Rating Difference Distribution")
+win_rate = games.groupby("gap_group")["higher_rated_wins"].mean()*100
 
-# 3-C  Boxplot — ratings of winners vs losers
-ax = axes[1, 0]
-winner_ratings  = df[df["winner"] == "white"]["white_rating"].values
-loser_ratings   = df[df["winner"] == "black"]["white_rating"].values   # white lost
-winner_b_rating = df[df["winner"] == "black"]["black_rating"].values
-loser_b_rating  = df[df["winner"] == "white"]["black_rating"].values   # black lost
+plt.subplot(2,2,1)
 
-all_winner = np.concatenate([winner_ratings, winner_b_rating])
-all_loser  = np.concatenate([loser_ratings,  loser_b_rating])
+plt.plot(gap_labels, win_rate, marker="o")
 
-bp = ax.boxplot([all_winner, all_loser], patch_artist=True, widths=0.5)
-bp["boxes"][0].set_facecolor('green')
-bp["boxes"][0].set_alpha(0.4)
-bp["boxes"][1].set_facecolor('red')
-bp["boxes"][1].set_alpha(0.4)
+plt.title("Higher Rated Player Win Rate")
+plt.xlabel("Rating Difference")
+plt.ylabel("Win %")
 
-ax.set_xticklabels(["Winners","Losers"], fontsize=9)
-ax.set_ylabel("Player Rating")
-ax.set_title("Rating of Winners vs Losers")
+plt.grid(True)
 
-# 3-D  White vs Black rating distribution (violin)
-ax = axes[1, 1]
-data_violin = [df["white_rating"].values, df["black_rating"].values]
-vp = ax.violinplot(data_violin, positions=[1, 2], showmedians=True, showextrema=False)
-colors_violin = ['blue', 'orange']
-for body, col in zip(vp["bodies"], colors_violin):
-    body.set_facecolor(col)
-    body.set_alpha(0.4)
-vp["cmedians"].set_color('black')
-vp["cmedians"].set_linewidth(1.5)
-ax.set_xticks([1, 2])
-ax.set_xticklabels(["White Rating","Black Rating"], fontsize=9)
-ax.set_ylabel("Rating")
-ax.set_title("Rating Distribution: White vs Black")
+
+
+# -------------------------------------------------
+# Rating Difference Distribution
+# -------------------------------------------------
+
+plt.subplot(2,2,2)
+
+plt.hist(df["rating_diff"], bins=40)
+
+plt.title("Rating Difference Distribution")
+plt.xlabel("White Rating - Black Rating")
+plt.ylabel("Games")
+
+
+
+# -------------------------------------------------
+# Winner Rating vs Loser Rating
+# -------------------------------------------------
+
+plt.subplot(2,2,3)
+
+winner_rating = []
+
+loser_rating = []
+
+for i,row in games.iterrows():
+
+    if row["winner"]=="white":
+
+        winner_rating.append(row["white_rating"])
+        loser_rating.append(row["black_rating"])
+
+    else:
+
+        winner_rating.append(row["black_rating"])
+        loser_rating.append(row["white_rating"])
+
+plt.boxplot([winner_rating,loser_rating],
+            labels=["Winner","Loser"])
+
+plt.title("Winner Rating vs Loser Rating")
+
+plt.ylabel("Rating")
+
+
+
+# -------------------------------------------------
+# White Rating vs Black Rating
+# -------------------------------------------------
+
+plt.subplot(2,2,4)
+
+plt.hist(df["white_rating"],
+         bins=30,
+         alpha=0.5,
+         label="White")
+
+plt.hist(df["black_rating"],
+         bins=30,
+         alpha=0.5,
+         label="Black")
+
+plt.title("White vs Black Rating")
+
+plt.xlabel("Rating")
+
+plt.ylabel("Games")
+
+plt.legend()
 
 plt.tight_layout()
-plt.savefig("fig3_rating_matters.png")
-plt.close()
-print("Saved fig3_rating_matters.png")
+
+plt.show()
 
 
-# ============================================================
-# FIGURE 4 — Openings Analysis  (2×2)
-# ============================================================
 
-fig, axes = plt.subplots(2, 2, figsize=(16, 13))
-fig.suptitle("CHESS OPENINGS — POPULARITY & EFFECTIVENESS", fontsize=12)
-plt.subplots_adjust(hspace=0.5, wspace=0.45, top=0.94)
+# =====================================================
+# FIGURE 4
+# OPENING ANALYSIS
+# =====================================================
 
-# 4-A  Top 20 most played openings
-ax = axes[0, 0]
-top20 = df["opening_name"].value_counts().head(20)
-ax.barh(range(20), top20.values[::-1], color='blue', edgecolor='black', linewidth=0.5, alpha=0.7)
-ax.set_yticks(range(20))
-ax.set_yticklabels([n[:36] for n in top20.index[::-1]], fontsize=7)
-for i, val in enumerate(top20.values[::-1]):
-    ax.text(val + 2, i, str(val), va="center", color='black', fontsize=7)
-ax.set_xlabel("Number of Games")
-ax.set_title("Top 20 Most Popular Openings")
-
-# 4-B  Top 15 openings by WHITE win rate  (min 100 games)
-ax = axes[0, 1]
-op = (df.groupby("opening_name")
-        .agg(games=("winner","count"),
-             white_wins=("winner", lambda x: (x=="white").sum()))
-        .reset_index())
-op = op[op["games"] >= 100].copy()
-op["white_win_pct"] = op["white_wins"] / op["games"] * 100
-top_wr = op.sort_values("white_win_pct", ascending=False).head(15)
-
-ax.barh(range(15), top_wr["white_win_pct"].values[::-1], color='orange', edgecolor='black', linewidth=0.5, alpha=0.7)
-ax.set_yticks(range(15))
-ax.set_yticklabels([n[:36] for n in top_wr["opening_name"].values[::-1]], fontsize=7)
-ax.axvline(50, color='gray', lw=1, ls="--", alpha=0.7, label="50%")
-for i, val in enumerate(top_wr["white_win_pct"].values[::-1]):
-    ax.text(val + 0.4, i, f"{val:.1f}%", va="center", color='black', fontsize=7)
-ax.set_xlim(0, 82)
-ax.set_xlabel("White Win Rate (%)")
-ax.legend(fontsize=8)
-ax.set_title("Best Openings for White (min 100 games)")
-
-# 4-C  Scatter — Popularity vs Win Rate
-ax = axes[1, 0]
-op50 = op[op["games"] >= 50].copy()
-scatter = ax.scatter(op50["games"], op50["white_win_pct"],
-                     c=op50["white_win_pct"], cmap="coolwarm",
-                     s=op50["games"] / 5, alpha=0.7,
-                     edgecolors='black', linewidths=0.5)
-ax.axhline(50, color='gray', lw=1, ls="--", alpha=0.6)
-# label the most popular ones
-for _, row in op50.nlargest(6, "games").iterrows():
-    ax.annotate(row["opening_name"][:22],
-                (row["games"], row["white_win_pct"]),
-                fontsize=6, color='black', alpha=0.8,
-                xytext=(5, 3), textcoords="offset points")
-plt.colorbar(scatter, ax=ax, label="White Win %")
-ax.set_xlabel("Number of Games (Popularity)")
-ax.set_ylabel("White Win Rate (%)")
-ax.set_title("Are Popular Openings Actually Effective?")
-
-# 4-D  Opening diversity — cumulative coverage
-ax = axes[1, 1]
-counts = df["opening_name"].value_counts()
-cumsum = counts.cumsum() / counts.sum() * 100
-x_vals = range(1, min(101, len(cumsum)+1))
-ax.plot(x_vals, cumsum.values[:100], color='red', lw=2)
-ax.axhline(cumsum.iloc[9],  color='blue', lw=1, ls="--",
-           label=f"Top 10 → {cumsum.iloc[9]:.1f}%")
-ax.axhline(cumsum.iloc[19], color='purple',  lw=1, ls="--",
-           label=f"Top 20 → {cumsum.iloc[19]:.1f}%")
-ax.fill_between(x_vals, cumsum.values[:100], alpha=0.1, color='red')
-ax.axvline(10, color='blue', lw=0.8, ls="--", alpha=0.6)
-ax.axvline(20, color='purple',  lw=0.8, ls="--", alpha=0.6)
-ax.set_xlabel("Top N Openings")
-ax.set_ylabel("Cumulative % of All Games")
-ax.legend(fontsize=8)
-ax.set_title(f"Opening Diversity ({counts.shape[0]} unique openings)")
-
-plt.tight_layout()
-plt.savefig("fig4_openings.png")
-plt.close()
-print("Saved fig4_openings.png")
+plt.figure(figsize=(14,10))
 
 
-# ============================================================
-# FIGURE 5 — Game Length  (2×2)
-# ============================================================
+# -------------------------------------------------
+# Top 20 Openings
+# -------------------------------------------------
 
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-fig.suptitle("HOW LONG DO CHESS GAMES LAST?", fontsize=12)
-plt.subplots_adjust(hspace=0.4, wspace=0.35)
+plt.subplot(2,2,1)
 
-# 5-A  Histogram of game length (turns)
-ax = axes[0, 0]
-ax.hist(df["turns"], bins=70, color='orange', edgecolor='black', linewidth=0.5, alpha=0.8)
-ax.axvline(df["turns"].median(), color='blue', lw=2, ls="--",
-           label=f"Median = {df['turns'].median():.0f} turns")
-ax.axvline(df["turns"].mean(), color='red', lw=2, ls=":",
-           label=f"Mean = {df['turns'].mean():.0f} turns")
-ax.set_xlabel("Number of Turns")
-ax.set_ylabel("Number of Games")
-ax.legend(fontsize=8)
-ax.set_title("Distribution of Game Length")
+top_openings = df["opening_name"].value_counts().head(20)
 
-# 5-B  Boxplot — turns by winner
-ax = axes[0, 1]
-data_turns = [
-    df.loc[df["winner"] == "white", "turns"].values,
-    df.loc[df["winner"] == "black", "turns"].values,
-    df.loc[df["winner"] == "draw",  "turns"].values,
-]
-bp = ax.boxplot(data_turns, patch_artist=True, widths=0.45)
-colors_turns = ['blue', 'orange', 'gray']
-for box, col in zip(bp["boxes"], colors_turns):
-    box.set_facecolor(col)
-    box.set_alpha(0.4)
-ax.set_xticklabels(["White Wins","Black Wins","Draw"], fontsize=8)
-ax.set_ylabel("Number of Turns")
-ax.set_title("Game Length by Winner")
+top_openings.plot(kind="barh")
 
-# 5-C  White win rate by game-length bucket
-ax = axes[1, 0]
-turn_bins   = [0, 20, 40, 60, 80, 120, 400]
-turn_labels = ["0–20","20–40","40–60","60–80","80–120","120+"]
-df["turn_group"] = pd.cut(df["turns"], bins=turn_bins, labels=turn_labels)
-wrate_turns = []
-count_turns = []
-for tg in turn_labels:
-    sub = df[df["turn_group"] == tg]
-    n   = max(len(sub[sub["winner"].isin(["white","black","draw"])]), 1)
-    wrate_turns.append((sub["winner"] == "white").sum() / n * 100)
-    count_turns.append(len(sub))
+plt.title("Top 20 Most Played Openings")
 
-ax.plot(turn_labels, wrate_turns, color='blue', lw=2, marker="s", markersize=6)
-ax.axhline(50, color='gray', lw=1, ls="--", alpha=0.6, label="50% line")
-for i, (val, cnt) in enumerate(zip(wrate_turns, count_turns)):
-    ax.text(i, val + 1.2, f"n={cnt:,}", ha="center", fontsize=7, color='gray')
-ax.set_ylabel("White Win Rate (%)")
-ax.set_ylim(35, 70)
-ax.legend(fontsize=8)
-ax.set_title("Do Short Games Favour White?")
+plt.xlabel("Games")
 
-# 5-D  Average game length by victory status
-ax = axes[1, 1]
-avg_turns = df.groupby("victory_status")["turns"].mean().sort_values(ascending=False)
-pal2 = ['red', 'blue', 'orange', 'gray']
-bars4 = ax.bar(avg_turns.index, avg_turns.values,
-               color=pal2[:len(avg_turns)], edgecolor='black', linewidth=1)
-for bar in bars4:
-    height = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width() / 2, height + 0.4,
-            f"{height:.1f}", ha="center", va="bottom", fontsize=8)
-ax.set_ylabel("Average Turns")
-ax.set_title("Average Game Length by How It Ended")
+
+
+# -------------------------------------------------
+# Best Openings for White
+# -------------------------------------------------
+
+plt.subplot(2,2,2)
+
+opening_stats = df.groupby("opening_name").agg(
+
+    games=("winner","count"),
+
+    white_wins=("winner",
+                lambda x:(x=="white").sum())
+
+)
+
+opening_stats = opening_stats[opening_stats["games"]>=100]
+
+opening_stats["white_win_rate"] = (
+
+    opening_stats["white_wins"] /
+    opening_stats["games"]
+
+)*100
+
+best_openings = opening_stats.sort_values(
+    "white_win_rate",
+    ascending=False
+).head(15)
+
+plt.barh(best_openings.index,
+         best_openings["white_win_rate"])
+
+plt.title("Top Openings for White")
+
+plt.xlabel("White Win %")
+
+
+
+# -------------------------------------------------
+# Popularity vs White Win Rate
+# -------------------------------------------------
+
+plt.subplot(2,2,3)
+
+plt.scatter(
+
+    opening_stats["games"],
+
+    opening_stats["white_win_rate"]
+
+)
+
+plt.title("Popularity vs White Win Rate")
+
+plt.xlabel("Number of Games")
+
+plt.ylabel("White Win %")
+
+
+
+# -------------------------------------------------
+# Opening Diversity
+# -------------------------------------------------
+
+plt.subplot(2,2,4)
+
+opening_count = df["opening_name"].value_counts()
+
+coverage = opening_count.cumsum()/opening_count.sum()*100
+
+plt.plot(range(1,101),
+
+         coverage.iloc[:100])
+
+plt.title("Opening Diversity")
+
+plt.xlabel("Top N Openings")
+
+plt.ylabel("Coverage %")
+
+plt.grid(True)
 
 plt.tight_layout()
-plt.savefig("fig5_game_length.png")
-plt.close()
-print("Saved fig5_game_length.png")
+
+plt.show()
+# =====================================================
+# FIGURE 5
+# GAME LENGTH ANALYSIS
+# =====================================================
+
+plt.figure(figsize=(14,10))
+
+# -------------------------------------------------
+# Distribution of Game Length
+# -------------------------------------------------
+
+plt.subplot(2,2,1)
+
+plt.hist(df["turns"], bins=40)
+
+plt.title("Distribution of Game Length")
+plt.xlabel("Number of Turns")
+plt.ylabel("Games")
+
+print("Average Turns :", df["turns"].mean())
+print("Median Turns :", df["turns"].median())
 
 
-# ============================================================
-# FIGURE 6 — Beginner vs Expert Behaviour  (2×3)
-# ============================================================
+# -------------------------------------------------
+# Game Length by Winner
+# -------------------------------------------------
 
-fig, axes = plt.subplots(2, 3, figsize=(18, 11))
-fig.suptitle("BEGINNER vs EXPERT — HOW DIFFERENTLY DO THEY PLAY?", fontsize=12)
-plt.subplots_adjust(hspace=0.45, wspace=0.38, top=0.93)
+plt.subplot(2,2,2)
 
-buckets = ["<1200","1200–1600","1600–2000","2000+"]
-b_bins  = [0, 1200, 1600, 2000, 3000]
-df["skill_group"] = pd.cut(df["avg_rating"], bins=b_bins, labels=buckets)
+white_turns = df[df["winner"]=="white"]["turns"]
 
-# 6-A  Average turns by skill group
-ax = axes[0, 0]
-avg_t = df.groupby("skill_group", observed=True)["turns"].mean()
-bars5 = ax.bar(buckets, avg_t.values,
-               color=['purple', 'blue', 'green', 'orange'],
-               edgecolor='black', linewidth=1)
-for bar in bars5:
-    height = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width() / 2, height + 0.4,
-            f"{height:.1f}", ha="center", va="bottom", fontsize=8)
-ax.set_ylabel("Average Number of Turns")
-ax.set_title("Do Experts Play Longer Games?")
+black_turns = df[df["winner"]=="black"]["turns"]
 
-# 6-B  Resign % vs Timeout % by skill group
-ax = axes[0, 1]
-resign_pct  = [
-    (df[df["skill_group"] == g]["victory_status"] == "resign").mean() * 100
-    for g in buckets
+draw_turns = df[df["winner"]=="draw"]["turns"]
+
+plt.boxplot(
+    [white_turns, black_turns, draw_turns],
+    labels=["White","Black","Draw"]
+)
+
+plt.title("Game Length by Winner")
+plt.ylabel("Turns")
+
+
+# -------------------------------------------------
+# White Win Rate by Game Length
+# -------------------------------------------------
+
+plt.subplot(2,2,3)
+
+turn_bins = [0,20,40,60,80,120,400]
+
+turn_labels = [
+    "0-20",
+    "20-40",
+    "40-60",
+    "60-80",
+    "80-120",
+    "120+"
 ]
-timeout_pct = [
-    (df[df["skill_group"] == g]["victory_status"] == "outoftime").mean() * 100
-    for g in buckets
+
+df["turn_group"] = pd.cut(
+    df["turns"],
+    bins=turn_bins,
+    labels=turn_labels
+)
+
+white_rate = []
+
+for group in turn_labels:
+
+    temp = df[df["turn_group"]==group]
+
+    if len(temp)>0:
+
+        rate = (temp["winner"]=="white").mean()*100
+
+    else:
+
+        rate = 0
+
+    white_rate.append(rate)
+
+plt.plot(turn_labels, white_rate, marker="o")
+
+plt.title("White Win Rate by Game Length")
+plt.xlabel("Turns")
+plt.ylabel("White Win %")
+
+plt.grid(True)
+
+
+# -------------------------------------------------
+# Average Turns by Victory Status
+# -------------------------------------------------
+
+plt.subplot(2,2,4)
+
+avg_turns = df.groupby("victory_status")["turns"].mean()
+
+avg_turns.plot(kind="bar")
+
+plt.title("Average Turns by Victory Status")
+
+plt.xlabel("Victory Status")
+
+plt.ylabel("Average Turns")
+
+plt.tight_layout()
+
+plt.show()
+
+
+
+# =====================================================
+# FIGURE 6
+# BEGINNER VS EXPERT
+# =====================================================
+
+plt.figure(figsize=(15,10))
+
+
+# -------------------------------------------------
+# Skill Groups
+# -------------------------------------------------
+
+skill_bins = [0,1200,1600,2000,3000]
+
+skill_labels = [
+    "<1200",
+    "1200-1600",
+    "1600-2000",
+    "2000+"
 ]
-x = np.arange(len(buckets))
-w = 0.35
-ax.bar(x - w/2, resign_pct,  w, label="Resign %",  color='red',  edgecolor='black')
-ax.bar(x + w/2, timeout_pct, w, label="Timeout %", color='blue', edgecolor='black')
-ax.set_xticks(x)
-ax.set_xticklabels(buckets)
-ax.set_ylabel("Percentage (%)")
-ax.legend(fontsize=8)
-ax.set_title("Resign vs Timeout by Skill Level")
 
-# 6-C  Favorite opening per skill group
-ax = axes[0, 2]
-fav = {}
-for grp in buckets:
-    sub = df[df["skill_group"] == grp]
-    fav[grp] = sub["opening_name"].value_counts().head(1).index[0]
+df["skill_group"] = pd.cut(
+    df["avg_rating"],
+    bins=skill_bins,
+    labels=skill_labels
+)
 
-fav_counts = []
-for grp in buckets:
-    sub = df[df["skill_group"] == grp]
-    fav_counts.append(sub[sub["opening_name"] == fav[grp]].shape[0])
 
-colors_fav = ['purple', 'blue', 'green', 'orange']
-bars6 = ax.bar(buckets, fav_counts, color=colors_fav, edgecolor='black', linewidth=1)
-ax.set_ylabel("Games Played with That Opening")
-ax.set_title("Top Opening per Skill Group")
-for bar, grp in zip(bars6, buckets):
-    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 5,
-            fav[grp][:20], ha="center", fontsize=6, color='black', rotation=8)
+# -------------------------------------------------
+# Average Turns by Skill
+# -------------------------------------------------
 
-# 6-D  Rating distribution per skill group
-ax = axes[1, 0]
-colors_sk = ['purple', 'blue', 'green', 'orange']
-for grp, col in zip(buckets, colors_sk):
-    sub = df[df["skill_group"] == grp]["avg_rating"].dropna()
-    ax.hist(sub, bins=30, color=col, alpha=0.5, label=grp, edgecolor="none")
-ax.set_xlabel("Average Rating")
-ax.set_ylabel("Number of Games")
-ax.legend(fontsize=8)
-ax.set_title("Rating Distribution by Skill Group")
+plt.subplot(2,3,1)
 
-# 6-E  Mate % vs Resign % vs Draw % — full breakdown per skill group
-ax = axes[1, 1]
-statuses = ["mate","resign","outoftime","draw"]
-status_colors = ['orange', 'red', 'blue', 'gray']
-bottom_vals = np.zeros(len(buckets))
-for status, col in zip(statuses, status_colors):
-    vals = [
-        (df[df["skill_group"] == g]["victory_status"] == status).mean() * 100
-        for g in buckets
+avg_turns = df.groupby("skill_group")["turns"].mean()
+
+avg_turns.plot(kind="bar")
+
+plt.title("Average Turns by Skill")
+
+plt.xlabel("Skill Group")
+
+plt.ylabel("Average Turns")
+
+
+# -------------------------------------------------
+# Resign vs Timeout
+# -------------------------------------------------
+
+plt.subplot(2,3,2)
+
+resign = []
+
+timeout = []
+
+for group in skill_labels:
+
+    temp = df[df["skill_group"]==group]
+
+    resign.append(
+        (temp["victory_status"]=="resign").mean()*100
+    )
+
+    timeout.append(
+        (temp["victory_status"]=="outoftime").mean()*100
+    )
+
+x = np.arange(len(skill_labels))
+
+width = 0.35
+
+plt.bar(x-width/2,resign,width,label="Resign")
+
+plt.bar(x+width/2,timeout,width,label="Timeout")
+
+plt.xticks(x,skill_labels)
+
+plt.ylabel("Percentage")
+
+plt.title("Resign vs Timeout")
+
+plt.legend()
+
+
+# -------------------------------------------------
+# Favourite Opening
+# -------------------------------------------------
+
+plt.subplot(2,3,3)
+
+favorite_openings = []
+
+opening_count = []
+
+for group in skill_labels:
+
+    temp = df[df["skill_group"]==group]
+
+    top = temp["opening_name"].value_counts()
+
+    favorite_openings.append(top.index[0])
+
+    opening_count.append(top.iloc[0])
+
+plt.bar(skill_labels,opening_count)
+
+plt.title("Most Used Opening")
+
+plt.xlabel("Skill Group")
+
+plt.ylabel("Games")
+
+print("\nFavourite Opening by Skill")
+
+for i in range(len(skill_labels)):
+
+    print(skill_labels[i],":",favorite_openings[i])
+
+
+# -------------------------------------------------
+# Rating Distribution
+# -------------------------------------------------
+
+plt.subplot(2,3,4)
+
+for group in skill_labels:
+
+    temp = df[df["skill_group"]==group]
+
+    plt.hist(
+        temp["avg_rating"],
+        bins=20,
+        alpha=0.5,
+        label=group
+    )
+
+plt.title("Rating Distribution")
+
+plt.xlabel("Average Rating")
+
+plt.ylabel("Games")
+
+plt.legend()
+
+
+# -------------------------------------------------
+# Victory Status by Skill
+# -------------------------------------------------
+
+plt.subplot(2,3,5)
+
+status = (
+    pd.crosstab(
+        df["skill_group"],
+        df["victory_status"],
+        normalize="index"
+    )
+    *100
+)
+
+status.plot(
+    kind="bar",
+    stacked=True,
+    ax=plt.gca()
+)
+
+plt.title("Victory Status by Skill")
+
+plt.xlabel("Skill Group")
+
+plt.ylabel("Percentage")
+
+plt.legend(fontsize=7)
+
+
+# -------------------------------------------------
+# Number of Games
+# -------------------------------------------------
+
+plt.subplot(2,3,6)
+
+df["skill_group"].value_counts().sort_index().plot(kind="bar")
+
+plt.title("Games in Each Skill Group")
+
+plt.xlabel("Skill Group")
+
+plt.ylabel("Games")
+
+plt.tight_layout()
+
+plt.show()
+# =====================================================
+# FIGURE 7
+# INTERESTING QUESTIONS
+# =====================================================
+
+plt.figure(figsize=(15,10))
+
+# -------------------------------------------------
+# Opening with Highest Draw Rate
+# -------------------------------------------------
+
+plt.subplot(2,3,1)
+
+opening_draw = df.groupby("opening_name").agg(
+    games=("winner","count"),
+    draws=("winner",lambda x:(x=="draw").sum())
+)
+
+opening_draw = opening_draw[opening_draw["games"]>=80]
+
+opening_draw["draw_rate"] = (
+    opening_draw["draws"] /
+    opening_draw["games"]
+)*100
+
+top_draw = opening_draw.sort_values(
+    "draw_rate",
+    ascending=False
+).head(10)
+
+plt.barh(top_draw.index, top_draw["draw_rate"])
+
+plt.title("Highest Draw Rate Openings")
+plt.xlabel("Draw %")
+
+
+# -------------------------------------------------
+# Checkmate Game Length
+# -------------------------------------------------
+
+plt.subplot(2,3,2)
+
+mate_games = df[df["victory_status"]=="mate"]
+
+plt.hist(mate_games["turns"], bins=30)
+
+plt.title("Turns Before Checkmate")
+
+plt.xlabel("Turns")
+
+plt.ylabel("Games")
+
+
+# -------------------------------------------------
+# White Win Rate in Popular Openings
+# -------------------------------------------------
+
+plt.subplot(2,3,3)
+
+popular = df["opening_name"].value_counts().head(15).index
+
+white_rate = []
+
+for opening in popular:
+
+    temp = df[df["opening_name"]==opening]
+
+    rate = (temp["winner"]=="white").mean()*100
+
+    white_rate.append(rate)
+
+plt.barh(popular,white_rate)
+
+plt.title("White Win Rate in Popular Openings")
+
+plt.xlabel("White Win %")
+
+
+# -------------------------------------------------
+# Very Short Games
+# -------------------------------------------------
+
+plt.subplot(2,3,4)
+
+short_games = df[df["turns"]<=15]
+
+short_games["winner"].value_counts().plot(kind="bar")
+
+plt.title("Winner in Very Short Games")
+
+plt.xlabel("Winner")
+
+plt.ylabel("Games")
+
+
+# -------------------------------------------------
+# Correlation Heatmap
+# -------------------------------------------------
+
+plt.subplot(2,3,5)
+
+numeric = df[
+    [
+        "white_rating",
+        "black_rating",
+        "avg_rating",
+        "turns",
+        "abs_diff"
     ]
-    ax.bar(buckets, vals, label=status.capitalize(),
-           color=col, edgecolor='black', linewidth=0.5, bottom=bottom_vals)
-    bottom_vals += np.array(vals)
-ax.set_ylabel("Percentage (%)")
-ax.set_ylim(0, 105)
-ax.legend(fontsize=8)
-ax.set_title("Victory Status Breakdown by Skill")
+]
 
-# 6-F  Number of games per skill group
-ax = axes[1, 2]
-grp_counts = df["skill_group"].value_counts().reindex(buckets)
-bars7 = ax.bar(buckets, grp_counts.values,
-               color=colors_sk, edgecolor='black', linewidth=1)
-for bar in bars7:
-    height = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width() / 2, height + 30,
-            f"{int(height)}", ha="center", va="bottom", fontsize=8)
-ax.set_ylabel("Number of Games")
-ax.set_title("How Many Games per Skill Group?")
+corr = numeric.corr()
 
-plt.tight_layout()
-plt.savefig("fig6_beginner_vs_expert.png")
-plt.close()
-print("Saved fig6_beginner_vs_expert.png")
+plt.imshow(corr)
+
+plt.colorbar()
+
+plt.xticks(
+    range(len(corr.columns)),
+    corr.columns,
+    rotation=90
+)
+
+plt.yticks(
+    range(len(corr.columns)),
+    corr.columns
+)
+
+plt.title("Correlation Matrix")
 
 
-# ============================================================
-# FIGURE 7 — Fun & Interesting Questions  (2×3)
-# ============================================================
+# -------------------------------------------------
+# Opening Length
+# -------------------------------------------------
 
-fig, axes = plt.subplots(2, 3, figsize=(18, 11))
-fig.suptitle("INTERESTING QUESTIONS — PATTERNS & SURPRISES", fontsize=12)
-plt.subplots_adjust(hspace=0.45, wspace=0.4, top=0.93)
+plt.subplot(2,3,6)
 
-# 7-A  Which opening has the most draws?
-ax = axes[0, 0]
-op_draw = (df.groupby("opening_name")
-             .agg(games=("winner","count"),
-                  draws=("winner", lambda x: (x=="draw").sum()))
-             .reset_index())
-op_draw = op_draw[op_draw["games"] >= 80].copy()
-op_draw["draw_pct"] = op_draw["draws"] / op_draw["games"] * 100
-top_draw = op_draw.sort_values("draw_pct", ascending=False).head(12)
+opening_bins=[0,2,4,6,8,10,30]
 
-ax.barh(range(12), top_draw["draw_pct"].values[::-1],
-        color='gray', edgecolor='black', linewidth=0.5, alpha=0.7)
-ax.set_yticks(range(12))
-ax.set_yticklabels([n[:32] for n in top_draw["opening_name"].values[::-1]], fontsize=7)
-ax.set_xlabel("Draw Rate (%)")
-ax.set_title("Which Openings End in Draws Most? (min 80 games)")
+opening_labels=[
+    "1-2",
+    "3-4",
+    "5-6",
+    "7-8",
+    "9-10",
+    "11+"
+]
 
-# 7-B  Quickest checkmates — turn count distribution for "mate" wins
-ax = axes[0, 1]
-mates = df[df["victory_status"] == "mate"]["turns"]
-ax.hist(mates, bins=50, color='red', edgecolor='black', linewidth=0.3, alpha=0.8)
-ax.axvline(mates.median(), color='blue', lw=2, ls="--",
-           label=f"Median = {mates.median():.0f} turns")
-ax.axvline(20, color='green', lw=1.5, ls=":",
-           label=f"<20 turns: {(mates<20).sum()} games")
-ax.set_xlabel("Number of Turns")
-ax.set_ylabel("Number of Games")
-ax.legend(fontsize=8)
-ax.set_title("How Many Turns Before Checkmate?")
+df["opening_group"]=pd.cut(
+    df["opening_ply"],
+    bins=opening_bins,
+    labels=opening_labels
+)
 
-# 7-C  Top openings preferred by winners
-ax = axes[0, 2]
-winners_df = df[df["winner"].isin(["white","black"])].copy()
+opening_rate=[]
 
-top_winner_openings = winners_df["opening_name"].value_counts().head(15)
-wr_for_top = []
-for op_name in top_winner_openings.index:
-    sub = df[df["opening_name"] == op_name]
-    n   = max(len(sub[sub["winner"].isin(["white","black","draw"])]), 1)
-    wr  = (sub["winner"] == "white").sum() / n * 100
-    wr_for_top.append(wr)
+for group in opening_labels:
 
-colors_top = ['green' if w >= 50 else 'red' for w in wr_for_top]
-ax.barh(range(15), wr_for_top[::-1],
-        color=colors_top[::-1], edgecolor='black', linewidth=0.5, alpha=0.7)
-ax.set_yticks(range(15))
-ax.set_yticklabels([n[:32] for n in top_winner_openings.index[::-1]], fontsize=7)
-ax.axvline(50, color='gray', lw=1, ls="--", alpha=0.7)
-ax.set_xlabel("White Win Rate (%)")
-ax.set_title("White Win Rate in Popular Openings")
+    temp=df[df["opening_group"]==group]
 
-# 7-D  Blunder games — very short games (≤15 turns) who wins?
-ax = axes[1, 0]
-short = df[df["turns"] <= 15]
-if len(short) > 0:
-    sc = short["winner"].value_counts()
-    bars_short = ax.bar(sc.index, sc.values,
-                        color=['blue' if v=="white" else 'orange' if v=="black" else 'gray' for v in sc.index],
-                        edgecolor='black', linewidth=1)
-    for bar in bars_short:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width() / 2, height + 0.5,
-                str(int(height)), ha="center", va="bottom", fontsize=9, fontweight="bold")
-ax.set_ylabel("Number of Games")
-ax.set_title(f"Very Short Games (≤15 turns) — Who Wins?")
+    if len(temp)>0:
 
-# 7-E  Correlation heatmap — numeric columns
-ax = axes[1, 1]
-num_cols_corr = ["white_rating","black_rating","turns","avg_rating","abs_diff"]
-corr = df[num_cols_corr].corr()
-mask = np.zeros_like(corr)
-mask[np.triu_indices_from(mask, k=1)] = True
-sns.heatmap(corr, ax=ax, annot=True, fmt=".2f",
-            cmap="coolwarm", center=0,
-            linewidths=0.5, linecolor='white')
-ax.set_title("Correlation Between Numeric Columns")
-ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha="right", fontsize=8)
-ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=8)
+        rate=(temp["winner"]=="white").mean()*100
 
-# 7-F  Are longer openings (more opening moves) better for White?
-ax = axes[1, 2]
-df["opening_length"] = df["opening_ply"]
-olen_bins   = [0, 2, 4, 6, 8, 10, 30]
-olen_labels = ["1–2","3–4","5–6","7–8","9–10","11+"]
-df["olen_group"] = pd.cut(df["opening_length"], bins=olen_bins, labels=olen_labels)
+    else:
 
-wr_olen = []
-count_olen = []
-for og in olen_labels:
-    sub = df[df["olen_group"] == og]
-    n   = max(len(sub[sub["winner"].isin(["white","black","draw"])]), 1)
-    wr_olen.append((sub["winner"] == "white").sum() / n * 100)
-    count_olen.append(len(sub))
+        rate=0
 
-bars_olen = ax.bar(olen_labels, wr_olen, color='orange', edgecolor='black', linewidth=1, alpha=0.8)
-ax.axhline(50, color='gray', lw=1, ls="--", alpha=0.6)
-for i, (val, cnt) in enumerate(zip(wr_olen, count_olen)):
-    ax.text(i, val + 0.5, f"{val:.1f}%\nn={cnt:,}", ha="center", fontsize=7)
-ax.set_xlabel("Opening Length (half-moves / ply)")
-ax.set_ylabel("White Win Rate (%)")
-ax.set_ylim(35, 65)
-ax.set_title("Does a Longer Opening Help White?")
+    opening_rate.append(rate)
+
+plt.bar(opening_labels,opening_rate)
+
+plt.title("Opening Length vs White Win")
+
+plt.xlabel("Opening Length")
+
+plt.ylabel("White Win %")
 
 plt.tight_layout()
-plt.savefig("fig7_interesting_questions.png")
-plt.close()
-print("Saved fig7_interesting_questions.png")
+
+plt.show()
 
 
-# ============================================================
-# FIGURE 8 — Opening ECO Codes  (1×2)
-# ============================================================
 
-fig, axes = plt.subplots(1, 2, figsize=(15, 6))
-fig.suptitle("ECO CODE ANALYSIS — CHESS OPENING FAMILIES", fontsize=12, y=1.01)
-plt.subplots_adjust(wspace=0.4)
+# =====================================================
+# FIGURE 8
+# ECO ANALYSIS
+# =====================================================
 
-# Chess ECO families
-eco_family = {
-    "A": "Flank Openings",
-    "B": "Semi-Open (not French)",
-    "C": "Open & French",
-    "D": "Closed & Semi-Closed",
-    "E": "Indian Defenses",
+plt.figure(figsize=(12,5))
+
+eco_names={
+    "A":"Flank",
+    "B":"Semi-Open",
+    "C":"Open",
+    "D":"Closed",
+    "E":"Indian"
 }
 
-df["eco_letter"] = df["opening_eco"].str[0]
+df["eco_group"]=df["opening_eco"].str[0]
 
-# 8-A  Number of games per ECO family
-ax = axes[0]
-eco_counts = df["eco_letter"].value_counts().reindex(["A","B","C","D","E"])
-eco_names  = [eco_family.get(k, k) for k in eco_counts.index]
-eco_colors = ['blue', 'purple', 'red', 'gray', 'green']
-bars8 = ax.bar(eco_names, eco_counts.values,
-               color=eco_colors, edgecolor='black', linewidth=1)
-for bar in bars8:
-    height = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width() / 2, height + 40,
-            f"{int(height)}", ha="center", va="bottom", fontsize=8)
-ax.set_xticks(range(len(eco_names)))
-ax.set_xticklabels(eco_names, rotation=20, ha="right", fontsize=8)
-ax.set_ylabel("Number of Games")
-ax.set_title("Games per ECO Opening Family")
 
-# 8-B  White win rate per ECO family
-ax = axes[1]
-eco_wr = []
+# -------------------------------------------------
+# Games by ECO
+# -------------------------------------------------
+
+plt.subplot(1,2,1)
+
+eco_count=df["eco_group"].value_counts().sort_index()
+
+plt.bar(
+    eco_count.index,
+    eco_count.values
+)
+
+plt.xticks(
+    eco_count.index,
+    [eco_names[i] for i in eco_count.index],
+    rotation=20
+)
+
+plt.title("Games by ECO")
+
+plt.xlabel("Opening Family")
+
+plt.ylabel("Games")
+
+
+# -------------------------------------------------
+# White Win Rate by ECO
+# -------------------------------------------------
+
+plt.subplot(1,2,2)
+
+eco_rate=[]
+
+labels=[]
+
 for eco in ["A","B","C","D","E"]:
-    sub = df[df["eco_letter"] == eco]
-    n   = max(len(sub[sub["winner"].isin(["white","black","draw"])]), 1)
-    eco_wr.append((sub["winner"] == "white").sum() / n * 100)
 
-bars9 = ax.bar(eco_names, eco_wr,
-               color=eco_colors, edgecolor='black', linewidth=1, alpha=0.8)
-ax.axhline(50, color='gray', lw=1.2, ls="--", alpha=0.7, label="50% line")
-for bar, val in zip(bars9, eco_wr):
-    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
-            f"{val:.1f}%", ha="center", color='black', fontsize=8, fontweight="bold")
-ax.set_xticks(range(len(eco_names)))
-ax.set_xticklabels(eco_names, rotation=20, ha="right", fontsize=8)
-ax.set_ylabel("White Win Rate (%)")
-ax.set_ylim(40, 60)
-ax.legend(fontsize=8)
-ax.set_title("Which Opening Family Favours White More?")
+    temp=df[df["eco_group"]==eco]
+
+    labels.append(eco_names[eco])
+
+    eco_rate.append(
+        (temp["winner"]=="white").mean()*100
+    )
+
+plt.bar(labels,eco_rate)
+
+plt.title("White Win Rate by ECO")
+
+plt.xlabel("Opening Family")
+
+plt.ylabel("White Win %")
 
 plt.tight_layout()
-plt.savefig("fig8_eco_codes.png")
-plt.close()
-print("Saved fig8_eco_codes.png")
+
+plt.show()
 
 
-# ============================================================
-# PRINT SUMMARY STATS
-# ============================================================
-print("\n" + "="*55)
-print("  CHESS EDA — KEY FINDINGS SUMMARY")
-print("="*55)
-print(f"  Total games analysed   : {total:,}")
-print(f"  White win rate         : {(df['winner']=='white').mean()*100:.2f}%")
-print(f"  Black win rate         : {(df['winner']=='black').mean()*100:.2f}%")
-print(f"  Draw rate              : {(df['winner']=='draw').mean()*100:.2f}%")
-print(f"  Unique openings        : {df['opening_name'].nunique():,}")
-print(f"  Avg game length        : {df['turns'].mean():.1f} turns")
-print(f"  Median game length     : {df['turns'].median():.0f} turns")
-print(f"  Shortest game          : {df['turns'].min()} turns")
-print(f"  Longest game           : {df['turns'].max()} turns")
-print(f"  Most common ending     : {df['victory_status'].value_counts().index[0]}")
-print(f"  Most popular opening   : {df['opening_name'].value_counts().index[0]}")
-print("="*55)
-print("\nAll 8 figures saved successfully!")
+
+# =====================================================
+# FINAL SUMMARY
+# =====================================================
+
+print("\n==============================")
+print("CHESS DATASET SUMMARY")
+print("==============================")
+
+print("Total Games :",len(df))
+
+print("White Wins :",
+      (df["winner"]=="white").sum())
+
+print("Black Wins :",
+      (df["winner"]=="black").sum())
+
+print("Draws :",
+      (df["winner"]=="draw").sum())
+
+print()
+
+print("White Win Rate :",
+      round((df["winner"]=="white").mean()*100,2),
+      "%")
+
+print("Black Win Rate :",
+      round((df["winner"]=="black").mean()*100,2),
+      "%")
+
+print("Draw Rate :",
+      round((df["winner"]=="draw").mean()*100,2),
+      "%")
+
+print()
+
+print("Average Turns :",
+      round(df["turns"].mean(),2))
+
+print("Median Turns :",
+      df["turns"].median())
+
+print("Shortest Game :",
+      df["turns"].min())
+
+print("Longest Game :",
+      df["turns"].max())
+
+print()
+
+print("Unique Openings :",
+      df["opening_name"].nunique())
+
+print("Most Popular Opening :",
+      df["opening_name"].value_counts().idxmax())
+
+print("Most Common Ending :",
+      df["victory_status"].value_counts().idxmax())
+
+print("==============================")
